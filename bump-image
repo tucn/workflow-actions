@@ -1,0 +1,57 @@
+name: Image Bump
+run-name: Bumping ${{ inputs.service }} in ${{ inputs.namespace }} namespace
+on:
+  workflow_call:
+    inputs:
+      scope:
+        required: true
+        description: "The scope of the overlays"
+        type: "string"
+      image:
+        required: true
+        description: The built image
+        type: "string"
+      tag:
+        required: true
+        description: The resulting digest of the OCI image
+        type: "string"
+      service:
+        required: true
+        description: The service
+        type: "string"
+      namespace:
+        required: true
+        description: The service namespace
+        type: "string"
+
+permissions:  # added using https://github.com/step-security/secure-repo
+  contents: read
+
+jobs:
+  bump:
+    permissions:
+      id-token: write # Enable OIDC
+      pull-requests: write
+      contents: write
+    steps:
+    - uses: actions/checkout@7884fcad6b5d53d10323aee724dc68d8b9096a2e
+    - name: Setup Kustomize
+      uses: imranismail/setup-kustomize@v1
+      with:
+        kustomize-version: "3.6.1"
+    - uses: chainguard-dev/actions/setup-gitsign@main
+    - name: Update Kubernetes resources
+      run: |
+       cd overlays/${{ inputs.scope }}
+       kustomize edit set image local/${{ inputs.namespace }}/${{ inputs.service }}=${{inputs.image}}@${{inputs.tag}}
+       cat kustomization.yaml        
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v4
+      with:
+        title: "Bumping ${{ inputs.namespace }}/${{ inputs.service }} in ${{ inputs.scope }} to ${{ inputs.tag }}"
+        commit-message: "bump(${{ inputs.scope }}): Update ${{ inputs.namespace }}/${{ inputs.service }} to ${{ inputs.tag }}"
+        body: "bump(${{ inputs.scope }}): Update ${{ inputs.namespace }}/${{ inputs.service }} to ${{ inputs.tag }}"
+        signoff: true
+        branch: bump-${{ inputs.scope }}/${{ inputs.namespace }}-${{ inputs.service }}
+        base: main
+        labels: bumping-${{ inputs.scope }}
